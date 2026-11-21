@@ -493,6 +493,65 @@ if weather:
 else:
     st.markdown('<p style="font-size:0.8rem;color:#9ca3af;">Weather unavailable.</p>', unsafe_allow_html=True)
 
+# ── Home Recommendation ─────────────────────────────────────────────
+st.markdown('<p class="section-title" style="margin-top:1.25rem">💡 Recommendation</p>', unsafe_allow_html=True)
+
+# Build a smart recommendation from moisture + weather
+rain_coming = False
+if weather:
+    hourly   = weather.get("hourly", {})
+    times    = hourly.get("time", [])
+    precip_p = hourly.get("precipitation_probability", [])
+    from datetime import datetime, timedelta
+    tomorrow = (datetime.now().date() + timedelta(days=1))
+    next48 = [precip_p[i] for i, t in enumerate(times)
+              if i < len(precip_p) and
+              (t.startswith(str(datetime.now().date())) or t.startswith(str(tomorrow)))]
+    rain_coming = any(p > 50 for p in next48)
+
+if moisture >= ALERT:
+    rec_icon = "🚨"
+    rec_color = "#ef4444"
+    rec_bg = "#fef2f2"
+    rec_title = "Action Needed"
+    rec_text = "Wood moisture is critically high. Check for leaks, standing water, or poor drainage near the foundation. Consider a dehumidifier."
+elif moisture >= WARN and rain_coming:
+    rec_icon = "⚠️"
+    rec_color = "#f59e0b"
+    rec_bg = "#fffbeb"
+    rec_title = "Monitor Closely"
+    rec_text = "Moisture is elevated and rain is in the forecast. Keep an eye on readings over the next 48 hours."
+elif moisture >= WARN:
+    rec_icon = "⚠️"
+    rec_color = "#f59e0b"
+    rec_bg = "#fffbeb"
+    rec_title = "Elevated Moisture"
+    rec_text = "Moisture is above normal. Ensure crawlspace vents are open and check for any new water intrusion."
+elif rain_coming and moisture > 14:
+    rec_icon = "🌧"
+    rec_color = "#3b82f6"
+    rec_bg = "#eff6ff"
+    rec_title = "Rain Expected"
+    rec_text = "Conditions are good now, but rain is coming. Check back after the storm to see if moisture levels rise."
+else:
+    rec_icon = "✅"
+    rec_color = "#16a34a"
+    rec_bg = "#f0fdf4"
+    rec_title = "All Good"
+    rec_text = "Moisture is in a healthy range and no major weather concerns. No action needed."
+
+st.markdown(f"""
+<div style="background:{rec_bg};border:1px solid {rec_color}44;border-left:4px solid {rec_color};
+     border-radius:10px;padding:0.85rem 1rem;margin-bottom:1rem;display:flex;gap:10px;align-items:flex-start;">
+  <span style="font-size:1.3rem;line-height:1.2">{rec_icon}</span>
+  <div>
+    <div style="font-family:'Space Grotesk',system-ui,sans-serif;font-weight:700;
+         font-size:0.9rem;color:{rec_color};margin-bottom:3px">{rec_title}</div>
+    <div style="font-size:0.8rem;color:#374151;line-height:1.4">{rec_text}</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
 # ════════════════════════════════════════════════════════════════════
 # House Notes
 # ════════════════════════════════════════════════════════════════════
