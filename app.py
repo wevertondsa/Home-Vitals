@@ -170,59 +170,9 @@ else:
     emoji, label, color, bg = "✅", "All Clear", "#16a34a", "#f0fdf4"
 
 # ════════════════════════════════════════════════════════════════════
-# Weather sidebar
+# Fetch weather (used on main page below)
 # ════════════════════════════════════════════════════════════════════
 weather = fetch_weather(lat, lon)
-
-with st.sidebar:
-    st.markdown("### 🌤 Weather")
-    st.markdown(f"*{address}*")
-    if weather:
-        cur = weather.get("current", {})
-        cur_temp   = cur.get("temperature_2m", "—")
-        cur_code   = cur.get("weathercode", 0)
-        cur_wind   = cur.get("windspeed_10m", "—")
-        cur_precip = cur.get("precipitation", 0)
-        cur_desc   = WMO.get(cur_code, "Unknown")
-
-        is_severe = cur_code in SEVERE
-        if is_severe:
-            st.error(f"⚠️ **{cur_desc}**")
-
-        st.metric("Temperature", f"{cur_temp}°F")
-        st.metric("Conditions",  cur_desc)
-        st.metric("Wind",        f"{cur_wind} mph")
-        if cur_precip > 0:
-            st.metric("Precipitation", f"{cur_precip} mm")
-
-        # Next 3-day outlook
-        st.markdown("---")
-        st.markdown("**3-Day Outlook**")
-        hourly   = weather.get("hourly", {})
-        times    = hourly.get("time", [])
-        precip_p = hourly.get("precipitation_probability", [])
-        wmo_h    = hourly.get("weathercode", [])
-
-        from datetime import datetime, timedelta
-        today = datetime.now().date()
-        for d_offset in range(3):
-            day = today + timedelta(days=d_offset)
-            day_label = "Today" if d_offset == 0 else day.strftime("%a %b %-d")
-            day_probs = [
-                precip_p[i] for i, t in enumerate(times)
-                if t.startswith(str(day)) and i < len(precip_p)
-            ]
-            day_codes = [
-                wmo_h[i] for i, t in enumerate(times)
-                if t.startswith(str(day)) and i < len(wmo_h)
-            ]
-            max_prob  = max(day_probs) if day_probs else 0
-            day_code  = max(set(day_codes), key=day_codes.count) if day_codes else 0
-            day_desc  = WMO.get(day_code, "")
-            rain_icon = "🌧" if max_prob > 50 else ("🌦" if max_prob > 20 else "☀️")
-            st.markdown(f"**{day_label}** — {rain_icon} {day_desc}  \n💧 {max_prob}% rain")
-    else:
-        st.warning("Weather unavailable")
 
 # ════════════════════════════════════════════════════════════════════
 # Styles
@@ -485,6 +435,63 @@ st.markdown(f"""
   <span>Posts every 30 min</span>
 </div>
 """, unsafe_allow_html=True)
+
+# ── Weather section ─────────────────────────────────────────────────
+st.markdown('<p class="section-title" style="margin-top:1.25rem">🌤 Local Weather</p>', unsafe_allow_html=True)
+
+if weather:
+    from datetime import datetime, timedelta
+    cur      = weather.get("current", {})
+    cur_temp = cur.get("temperature_2m", "—")
+    cur_code = cur.get("weathercode", 0)
+    cur_wind = cur.get("windspeed_10m", "—")
+    cur_desc = WMO.get(cur_code, "Unknown")
+    is_severe = cur_code in SEVERE
+
+    if is_severe:
+        st.error(f"⚠️ **Weather Alert: {cur_desc}**")
+
+    st.markdown(f"""
+<div class="metric-row">
+  <div class="metric-card">
+    <div class="metric-value">{cur_temp}<span class="metric-unit">°F</span></div>
+    <div class="metric-label">Outside Temp</div>
+  </div>
+  <div class="metric-card" style="flex:2">
+    <div class="metric-value" style="font-size:1rem;padding-top:4px">{cur_desc}</div>
+    <div class="metric-label">Conditions · {cur_wind} mph wind</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+    # 3-day outlook
+    hourly   = weather.get("hourly", {})
+    times    = hourly.get("time", [])
+    precip_p = hourly.get("precipitation_probability", [])
+    wmo_h    = hourly.get("weathercode", [])
+    today    = datetime.now().date()
+
+    day_cards = ""
+    for d_offset in range(3):
+        day = today + timedelta(days=d_offset)
+        day_label = "Today" if d_offset == 0 else day.strftime("%a %-d")
+        day_probs = [precip_p[i] for i, t in enumerate(times) if t.startswith(str(day)) and i < len(precip_p)]
+        day_codes = [wmo_h[i]    for i, t in enumerate(times) if t.startswith(str(day)) and i < len(wmo_h)]
+        max_prob  = max(day_probs) if day_probs else 0
+        day_code  = max(set(day_codes), key=day_codes.count) if day_codes else 0
+        day_desc  = WMO.get(day_code, "")
+        rain_icon = "🌧" if max_prob > 50 else ("🌦" if max_prob > 20 else "☀️")
+        day_cards += f"""
+  <div class="metric-card">
+    <div style="font-size:1.1rem">{rain_icon}</div>
+    <div class="metric-label" style="font-size:0.68rem;color:#374151;margin-top:4px">{day_label}</div>
+    <div class="metric-label">{day_desc}</div>
+    <div class="metric-label">💧 {max_prob}%</div>
+  </div>"""
+
+    st.markdown(f'<div class="metric-row">{day_cards}</div>', unsafe_allow_html=True)
+else:
+    st.markdown('<p style="font-size:0.8rem;color:#9ca3af;">Weather unavailable.</p>', unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════════
 # House Notes
