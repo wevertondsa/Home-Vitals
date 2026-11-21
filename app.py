@@ -22,8 +22,7 @@ st.set_page_config(
 )
 
 HOUSES = {
-    "123-oak-st":    ("123 Oak Street",    "moisture-sensor-01", (41.9609, -72.2954)),
-    "456-maple-ave": ("456 Maple Avenue",  "moisture-sensor-02", (41.9609, -72.2954)),
+    "8-edgewood-st": ("8 Edgewood St, Stafford Springs CT", "moisture-sensor-01", (41.9609, -72.2954)),
 }
 
 INFLUX_URL    = "https://us-east-1-1.aws.cloud2.influxdata.com"
