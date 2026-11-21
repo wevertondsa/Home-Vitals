@@ -6,6 +6,7 @@
 # ═══════════════════════════════════════════════════════════════════
 
 import os
+import requests
 import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -21,8 +22,8 @@ st.set_page_config(
 )
 
 HOUSES = {
-    "123-oak-st":    ("123 Oak Street",    "moisture-sensor-01"),
-    "456-maple-ave": ("456 Maple Avenue",  "moisture-sensor-02"),
+    "123-oak-st":    ("123 Oak Street",    "moisture-sensor-01", (41.9609, -72.2954)),
+    "456-maple-ave": ("456 Maple Avenue",  "moisture-sensor-02", (41.9609, -72.2954)),
 }
 
 INFLUX_URL    = "https://us-east-1-1.aws.cloud2.influxdata.com"
@@ -32,6 +33,17 @@ INFLUX_BUCKET = "Sensors V1"
 
 WARN  = 19
 ALERT = 25
+
+WMO = {
+    0:"Clear sky", 1:"Mainly clear", 2:"Partly cloudy", 3:"Overcast",
+    45:"Foggy", 48:"Icy fog", 51:"Light drizzle", 53:"Drizzle",
+    55:"Heavy drizzle", 61:"Light rain", 63:"Rain", 65:"Heavy rain",
+    71:"Light snow", 73:"Snow", 75:"Heavy snow", 77:"Snow grains",
+    80:"Rain showers", 81:"Heavy showers", 82:"Violent showers",
+    85:"Snow showers", 86:"Heavy snow showers",
+    95:"Thunderstorm", 96:"Thunderstorm + hail", 99:"Severe thunderstorm",
+}
+SEVERE = {65, 75, 80, 81, 82, 85, 86, 95, 96, 99}
 
 house_id = st.query_params.get("house", "")
 
@@ -44,7 +56,7 @@ if house_id not in HOUSES:
     st.error("House not found. Check the link in your text message.")
     st.stop()
 
-address, device_tag = HOUSES[house_id]
+address, device_tag, (lat, lon) = HOUSES[house_id]
 
 @st.cache_data(ttl=1800)
 def fetch_data(device: str, days: int = 30) -> pd.DataFrame:
@@ -101,6 +113,21 @@ def fetch_notes(device: str):
     df["_time"] = pd.to_datetime(df["_time"]).dt.tz_localize(None)
     return list(zip(df["_time"], df["_value"]))
 
+@st.cache_data(ttl=3600)
+def fetch_weather(lat: float, lon: float):
+    url = (
+        f"https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat}&longitude={lon}"
+        f"&current=temperature_2m,weathercode,windspeed_10m,precipitation"
+        f"&hourly=precipitation_probability,weathercode"
+        f"&forecast_days=3&temperature_unit=fahrenheit&windspeed_unit=mph"
+    )
+    try:
+        r = requests.get(url, timeout=5)
+        return r.json()
+    except Exception:
+        return None
+
 df = fetch_data(device_tag)
 
 if df.empty:
@@ -108,10 +135,10 @@ if df.empty:
     st.warning("No readings yet — sensor may still be setting up. Check back soon.")
     st.stop()
 
-latest   = df.iloc[-1]
-moisture = latest["moisture"]
-temp_f   = latest["temperature"]
-humidity = latest["humidity"]
+latest    = df.iloc[-1]
+moisture  = latest["moisture"]
+temp_f    = latest["temperature"]
+humidity  = latest["humidity"]
 last_time = latest["time"]
 
 if moisture >= ALERT:
@@ -151,6 +178,50 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
+# ── Weather sidebar ───────────────────────────────────────────────
+wx = fetch_weather(lat, lon)
+
+with st.sidebar:
+    st.markdown("### 🌤 Weather")
+    if wx:
+        cur  = wx["current"]
+        temp = cur["temperature_2m"]
+        code = cur["weathercode"]
+        wind = cur["windspeed_10m"]
+        desc = WMO.get(code, "Unknown")
+
+        st.metric("Now", f"{temp:.0f}°F", delta=desc, delta_color="off")
+        st.caption(f"💨 Wind: {wind:.0f} mph")
+
+        hours = wx["hourly"]
+        precip_max = max(hours["precipitation_probability"][:48])
+        severe_codes = [hours["weathercode"][i] for i in range(48) if hours["weathercode"][i] in SEVERE]
+
+        if severe_codes:
+            st.error(f"⚠️ {WMO.get(severe_codes[0], 'Severe weather')} in forecast")
+        elif precip_max >= 60:
+            st.warning(f"🌧 Rain likely — up to {precip_max:.0f}% in next 48h")
+        else:
+            st.success("No severe weather expected")
+
+        st.markdown("**48h Rain Probability**")
+        fig_wx = go.Figure()
+        fig_wx.add_trace(go.Bar(
+            x=hours["time"][:48],
+            y=hours["precipitation_probability"][:48],
+            marker_color="#3b82f6",
+        ))
+        fig_wx.update_layout(height=120, margin=dict(l=0,r=0,t=4,b=0),
+            plot_bgcolor="white", paper_bgcolor="white",
+            xaxis=dict(showticklabels=False, showgrid=False),
+            yaxis=dict(range=[0,100], ticksuffix="%",
+                       tickfont=dict(size=9, color="#9ca3af"),
+                       showgrid=True, gridcolor="#f3f4f6"))
+        st.plotly_chart(fig_wx, use_container_width=True, config={"displayModeBar": False})
+    else:
+        st.caption("Weather unavailable")
+
+# ── Main content ──────────────────────────────────────────────────
 time_str = last_time.strftime("%-I:%M %p · %b %-d")
 
 st.markdown('<div class="hv-brand">Home<span>Vitals</span></div>', unsafe_allow_html=True)
@@ -233,7 +304,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── House Notes ───────────────────────────────────────────────────────
+# ── House Notes ───────────────────────────────────────────────────
 st.markdown('<p class="section-title" style="margin-top:1.25rem">House Notes</p>', unsafe_allow_html=True)
 
 notes = fetch_notes(device_tag)
