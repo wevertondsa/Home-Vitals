@@ -8,6 +8,7 @@
 import os
 import requests
 import streamlit as st
+# import anthropic  # ← uncomment when you have a Claude API key
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
@@ -495,6 +496,62 @@ else:
 
 # ── Home Recommendation ─────────────────────────────────────────────
 st.markdown('<p class="section-title" style="margin-top:1.25rem">💡 Recommendation</p>', unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────
+# CLAUDE AI RECOMMENDATION (commented out until API key is ready)
+# ─────────────────────────────────────────────────────────────────────
+# To enable:
+#   1. Get an API key at console.anthropic.com
+#   2. Add  ANTHROPIC_API_KEY = "sk-ant-..."  to Streamlit Cloud Secrets
+#   3. Run:  pip install anthropic  (add "anthropic" to requirements.txt)
+#   4. Uncomment everything below marked  # AI:
+#
+# AI: @st.cache_data(ttl=1800)
+# AI: def ai_recommendation(moisture, temp_f, humidity, trend_7d, rain_coming, weather_desc):
+# AI:     """Call Claude Haiku to generate a plain-English home recommendation."""
+# AI:     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+# AI:     if not ANTHROPIC_API_KEY:
+# AI:         return None
+# AI:     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+# AI:     prompt = f"""You are a home structural health advisor. Given these sensor readings,
+# AI: write ONE short paragraph (2-3 sentences) recommending what the homeowner should do.
+# AI: Be specific and practical. No fluff.
+# AI:
+# AI: - Wood moisture: {moisture:.1f}% (healthy = below 19%, concerning = above 25%)
+# AI: - Moisture trend (7-day): {trend_7d:+.1f}% change
+# AI: - Indoor temperature: {temp_f:.0f}°F
+# AI: - Indoor humidity: {humidity:.0f}%
+# AI: - Current outside weather: {weather_desc}
+# AI: - Rain in next 48h: {"Yes" if rain_coming else "No"}"""
+# AI:     message = client.messages.create(
+# AI:         model="claude-haiku-4-5",
+# AI:         max_tokens=200,
+# AI:         messages=[{"role": "user", "content": prompt}]
+# AI:     )
+# AI:     return message.content[0].text
+#
+# AI: # Compute 7-day moisture trend
+# AI: trend_7d = 0.0
+# AI: if len(df) > 1:
+# AI:     week_ago = df[df["time"] >= df["time"].max() - pd.Timedelta(days=7)]
+# AI:     if len(week_ago) > 1:
+# AI:         trend_7d = week_ago["moisture"].iloc[-1] - week_ago["moisture"].iloc[0]
+#
+# AI: cur_weather_desc = WMO.get(weather.get("current", {}).get("weathercode", 0), "Unknown") if weather else "Unknown"
+# AI: ai_rec = ai_recommendation(moisture, temp_f, humidity, trend_7d, rain_coming, cur_weather_desc)
+# AI: if ai_rec:
+# AI:     st.markdown(f"""
+# AI: <div style="background:#f0f9ff;border:1px solid #bae6fd;border-left:4px solid #0ea5e9;
+# AI:      border-radius:10px;padding:0.85rem 1rem;margin-bottom:1rem;display:flex;gap:10px;align-items:flex-start;">
+# AI:   <span style="font-size:1.3rem">🤖</span>
+# AI:   <div>
+# AI:     <div style="font-family:'Space Grotesk',system-ui,sans-serif;font-weight:700;
+# AI:          font-size:0.9rem;color:#0369a1;margin-bottom:3px">AI Advisor</div>
+# AI:     <div style="font-size:0.8rem;color:#374151;line-height:1.4">{ai_rec}</div>
+# AI:   </div>
+# AI: </div>
+# AI: """, unsafe_allow_html=True)
+# ─────────────────────────────────────────────────────────────────────
 
 # Build a smart recommendation from moisture + weather
 rain_coming = False
