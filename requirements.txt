@@ -3,3 +3,4 @@ influxdb-client
 pandas
 plotly
 requests
+# anthropic  ← uncomment when you have a Claude API key
